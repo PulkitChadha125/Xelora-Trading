@@ -42,10 +42,13 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import Tool, BaseTool
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain.agents import AgentExecutor, create_openai_tools_agent
+try:
+    from langchain.agents import AgentExecutor, create_openai_tools_agent
+except ImportError:
+    # LangChain 1.x moved agents to langchain-classic
+    from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 from langchain_community.vectorstores import PGVector
 from langchain_openai import OpenAIEmbeddings
-from langchain_core.pydantic_v1 import BaseModel as PydanticBaseModel, Field
 
 # ── CONDITIONAL IMPORTS (with error handling) ──────────────────────────────
 # Setup logging early
