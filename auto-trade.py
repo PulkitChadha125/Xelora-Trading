@@ -590,14 +590,14 @@ def get_db_url():
     config = get_db_config()
     return f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}"
 
+def is_database_enabled() -> bool:
+    """PostgreSQL is optional; off by default for local demo runs."""
+    return os.getenv("ENABLE_DATABASE", "false").lower() in ("1", "true", "yes")
+
+
 def pg_conn():
-    """Create PostgreSQL connection"""
-    try:
-        return psycopg2.connect(**get_db_config())
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
-        st.error(f"Database connection failed: {e}")
-        raise
+    """Create PostgreSQL connection (no Streamlit UI side effects)."""
+    return psycopg2.connect(**get_db_config())
 
 def get_sqlalchemy_engine():
     """Create SQLAlchemy engine for pandas operations"""
@@ -610,9 +610,11 @@ def get_sqlalchemy_engine():
         logger.error(f"SQLAlchemy engine creation failed: {e}")
         raise
 
-# Initialize database
-def init_database():
-    """Initialize database with error handling"""
+def init_database() -> bool:
+    """Initialize PostgreSQL when ENABLE_DATABASE=true; otherwise skip quietly."""
+    if not is_database_enabled():
+        logger.info("PostgreSQL disabled (set ENABLE_DATABASE=true in .env to enable)")
+        return False
     try:
         with pg_conn() as c:
             cur = c.cursor()
@@ -635,24 +637,12 @@ def init_database():
             """)
             c.commit()
             logger.info("Database initialized successfully")
-            
-            # Warn if SQLAlchemy is not available
-            if not SQLALCHEMY_AVAILABLE:
-                logger.warning("SQLAlchemy not available. Installing: pip install sqlalchemy psycopg2-binary")
-                st.sidebar.warning("📦 Install SQLAlchemy to eliminate pandas warnings: `pip install sqlalchemy psycopg2-binary`")
-            
             return True
     except Exception as e:
-        logger.error(f"Database initialization error: {e}")
-        st.sidebar.error(f"Database connection failed: {e}. Results won't be saved.")
-        
-        # Show configuration help
-        if "could not translate host name" in str(e):
-            st.sidebar.info("Check your .env file database configuration.")
-        
+        logger.warning(f"Database initialization skipped: {e}")
         return False
 
-# Try to initialize database
+
 database_available = init_database()
 
 # ── SIMULATION FUNCTIONS ───────────────────────────────────────────────────
@@ -3963,11 +3953,13 @@ def main():
             st.error("❌ OpenAI API Key missing")
             st.info("Add OPENAI_API_KEY to your .env file")
         
-        # Database status
+        # Database status (optional — past results use session storage)
         if database_available:
-            st.success("✅ Database connected")
+            st.success("✅ PostgreSQL connected")
+        elif is_database_enabled():
+            st.warning("⚠️ PostgreSQL enabled but not reachable — check DB_HOST/DB_PORT in .env")
         else:
-            st.warning("⚠️ Database not available")
+            st.info("ℹ️ PostgreSQL off — simulations save to this browser session (View Past Results)")
         
         # Feature availability
         st.markdown("**Available Features:**")
